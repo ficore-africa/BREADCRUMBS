@@ -423,6 +423,146 @@ def manage_user_subscriptions():
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
         return render_template('error/500.html'), 500
 
+@admin_bp.route('/receipts', methods=['GET'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_receipts():
+    """View and manage payment receipts."""
+    try:
+        db = utils.get_mongo_db()
+        if db is None:
+            raise Exception("Failed to connect to MongoDB")
+        
+        # Get all payment receipts with user information
+        receipts = list(db.payment_receipts.find().sort('uploaded_at', -1))
+        
+        # Enrich receipts with user information
+        for receipt in receipts:
+            receipt['_id'] = str(receipt['_id'])
+            user = db.users.find_one({'_id': receipt['user_id']})
+            receipt['user_email'] = user.get('email', 'Unknown') if user else 'Unknown'
+            receipt['user_display_name'] = user.get('display_name', receipt['user_id']) if user else receipt['user_id']
+        
+        logger.info(f"Admin {current_user.id} accessed receipts management",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        
+        return render_template('admin/receipts.html', receipts=receipts, 
+                             title=trans('admin_manage_receipts_title', default='Manage Payment Receipts'))
+    except Exception as e:
+        logger.error(f"Error fetching receipts for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
+
+@admin_bp.route('/receipts/approve/<receipt_id>', methods=['POST'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("10 per hour")
+def approve_receipt(receipt_id):
+    """Approve a payment receipt and activate user subscription."""
+    try:
+        from bson import ObjectId
+        db = utils.get_mongo_db()
+        if db is None:
+            raise Exception("Failed to connect to MongoDB")
+        
+        receipt = db.payment_receipts.find_one({'_id': ObjectId(receipt_id)})
+        if not receipt:
+            flash(trans('admin_receipt_not_found', default='Receipt not found'), 'danger')
+            return redirect(url_for('admin.manage_receipts'))
+        
+        # Update receipt status
+        db.payment_receipts.update_one(
+            {'_id': ObjectId(receipt_id)},
+            {'$set': {'status': 'approved', 'approved_by': current_user.id, 'approved_at': datetime.now(timezone.utc)}}
+        )
+        
+        # Activate user subscription
+        plan_duration = 30 if receipt['plan_type'] == 'monthly' else 365
+        subscription_end = datetime.now(timezone.utc) + timedelta(days=plan_duration)
+        
+        db.users.update_one(
+            {'_id': receipt['user_id']},
+            {'$set': {
+                'is_subscribed': True,
+                'subscription_plan': receipt['plan_type'],
+                'subscription_start': datetime.now(timezone.utc),
+                'subscription_end': subscription_end,
+                'updated_at': datetime.now(timezone.utc)
+            }}
+        )
+        
+        # Log the action
+        log_audit_action('approve_receipt', {
+            'receipt_id': receipt_id,
+            'user_id': receipt['user_id'],
+            'plan_type': receipt['plan_type'],
+            'amount': receipt['amount_paid']
+        })
+        
+        logger.info(f"Admin {current_user.id} approved receipt {receipt_id} for user {receipt['user_id']}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        
+        flash(trans('admin_receipt_approved', default='Receipt approved and subscription activated'), 'success')
+        return redirect(url_for('admin.manage_receipts'))
+        
+    except Exception as e:
+        logger.error(f"Error approving receipt {receipt_id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while processing the request'), 'danger')
+        return redirect(url_for('admin.manage_receipts'))
+
+@admin_bp.route('/receipts/reject/<receipt_id>', methods=['POST'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("10 per hour")
+def reject_receipt(receipt_id):
+    """Reject a payment receipt."""
+    try:
+        from bson import ObjectId
+        db = utils.get_mongo_db()
+        if db is None:
+            raise Exception("Failed to connect to MongoDB")
+        
+        receipt = db.payment_receipts.find_one({'_id': ObjectId(receipt_id)})
+        if not receipt:
+            flash(trans('admin_receipt_not_found', default='Receipt not found'), 'danger')
+            return redirect(url_for('admin.manage_receipts'))
+        
+        # Get rejection reason
+        rejection_reason = request.form.get('rejection_reason', '').strip()
+        
+        # Update receipt status
+        db.payment_receipts.update_one(
+            {'_id': ObjectId(receipt_id)},
+            {'$set': {
+                'status': 'rejected',
+                'rejected_by': current_user.id,
+                'rejected_at': datetime.now(timezone.utc),
+                'rejection_reason': rejection_reason
+            }}
+        )
+        
+        # Log the action
+        log_audit_action('reject_receipt', {
+            'receipt_id': receipt_id,
+            'user_id': receipt['user_id'],
+            'rejection_reason': rejection_reason
+        })
+        
+        logger.info(f"Admin {current_user.id} rejected receipt {receipt_id} for user {receipt['user_id']}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        
+        flash(trans('admin_receipt_rejected', default='Receipt rejected'), 'success')
+        return redirect(url_for('admin.manage_receipts'))
+        
+    except Exception as e:
+        logger.error(f"Error rejecting receipt {receipt_id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while processing the request'), 'danger')
+        return redirect(url_for('admin.manage_receipts'))
+
 @admin_bp.route('/users/trials', methods=['GET', 'POST'])
 @login_required
 @utils.requires_role('admin')
