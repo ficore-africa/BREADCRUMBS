@@ -179,6 +179,13 @@
                         <label class="profile-form-check-label" for="appSoundsToggle"></label>
                     </div>
                 </div>
+                <div class="profile-toggle-item">
+                    <i class="bi bi-clock-history profile-icon-left"></i> {{ t('settings_activity_sidebar', default='Recent Activity Sidebar') }}
+                    <div class="profile-form-check form-switch">
+                        <input class="profile-form-check-input" type="checkbox" id="activitySidebarToggle" {% if user.settings.get('activity_sidebar_enabled', True) %}checked{% endif %}>
+                        <label class="profile-form-check-label" for="activitySidebarToggle"></label>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -251,6 +258,15 @@
                         alert('{{ t('settings_fingerprint_not_supported', default='Fingerprint authentication is not supported on this device.') }}');
                         this.checked = false;
                         return;
+                    }
+                }
+
+                // Special handling for activity sidebar toggle
+                if (settingName === 'activitySidebarToggle') {
+                    // Update the sidebar immediately if the function exists
+                    if (typeof toggleSidebarSetting === 'function') {
+                        toggleSidebarSetting(value);
+                        return; // toggleSidebarSetting handles the server update
                     }
                 }
 

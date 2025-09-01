@@ -1,3 +1,9 @@
+<!-- Persistent Toggle Button (always visible) -->
+<div class="sidebar-persistent-toggle" id="sidebarPersistentToggle" onclick="toggleActivitySidebar()">
+    <i class="bi bi-clock-history"></i>
+    <span class="toggle-tooltip">{{ t('general_recent_activity', default='Recent Activity') | e }}</span>
+</div>
+
 <div class="recent-activity-sidebar" id="recentActivitySidebar">
     <div class="sidebar-header">
         <button class="btn btn-sm btn-outline-secondary sidebar-toggle" onclick="toggleActivitySidebar()" aria-label="{{ t('general_toggle_sidebar', default='Toggle sidebar') | e }}">
@@ -7,9 +13,8 @@
             <i class="bi bi-clock-history me-2"></i>
             {{ t('general_recent_activity', default='Recent Activity') | e }}
         </h6>
-        <div class="form-check form-switch ms-2">
-            <input class="form-check-input" type="checkbox" id="sidebarDisableSwitch" onchange="toggleSidebarDisable()" checked>
-            <label class="form-check-label" for="sidebarDisableSwitch">{{ t('general_enable_sidebar', default='Enable Sidebar') | e }}</label>
+        <div class="sidebar-drag-handle d-md-none" id="sidebarDragHandle">
+            <i class="bi bi-grip-horizontal"></i>
         </div>
     </div>
     
@@ -38,6 +43,59 @@
 </div>
 
 <style>
+/* Persistent Toggle Button */
+.sidebar-persistent-toggle {
+    position: fixed;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    width: 45px;
+    height: 45px;
+    background: rgba(0, 123, 255, 0.9);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1041;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.sidebar-persistent-toggle:hover {
+    background: rgba(0, 123, 255, 1);
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+}
+
+.sidebar-persistent-toggle.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%) scale(0.8);
+}
+
+.toggle-tooltip {
+    position: absolute;
+    right: 55px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-persistent-toggle:hover .toggle-tooltip {
+    opacity: 1;
+}
+
 .recent-activity-sidebar {
     position: fixed;
     top: 50%;
@@ -74,6 +132,29 @@
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);
     background: rgba(248, 249, 250, 0.8);
     border-radius: 12px 0 0 0;
+    position: relative;
+}
+
+.sidebar-drag-handle {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    color: #6c757d;
+    cursor: grab;
+    padding: 5px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.sidebar-drag-handle:active {
+    cursor: grabbing;
+    background: rgba(0, 123, 255, 0.1);
+}
+
+.sidebar-drag-handle:hover {
+    color: #007bff;
+    background: rgba(0, 123, 255, 0.05);
 }
 
 .sidebar-title {
@@ -190,6 +271,20 @@
 .activity-icon.report { background: rgba(108, 117, 125, 0.1); }
 
 /* Dark mode support */
+.dark-mode .sidebar-persistent-toggle {
+    background: rgba(0, 123, 255, 0.9);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+}
+
+.dark-mode .sidebar-persistent-toggle:hover {
+    background: rgba(0, 123, 255, 1);
+}
+
+.dark-mode .toggle-tooltip {
+    background: rgba(255, 255, 255, 0.9);
+    color: #212529;
+}
+
 .dark-mode .recent-activity-sidebar {
     background: rgba(33, 37, 41, 0.98);
     border-color: rgba(255, 255, 255, 0.1);
@@ -202,6 +297,15 @@
 
 .dark-mode .sidebar-title {
     color: #f8f9fa;
+}
+
+.dark-mode .sidebar-drag-handle {
+    color: #adb5bd;
+}
+
+.dark-mode .sidebar-drag-handle:hover {
+    color: #007bff;
+    background: rgba(0, 123, 255, 0.1);
 }
 
 .dark-mode .activity-item {
@@ -228,17 +332,37 @@
 
 /* Mobile responsive */
 @media (max-width: 768px) {
+    .sidebar-persistent-toggle {
+        width: 40px;
+        height: 40px;
+        right: 8px;
+    }
+    
+    .toggle-tooltip {
+        right: 50px;
+        font-size: 0.7rem;
+        padding: 4px 8px;
+    }
+    
     .recent-activity-sidebar {
         width: 280px;
         right: -240px;
+        top: 20%;
+        transform: translateY(0);
+        max-height: 70vh;
     }
     
     .recent-activity-sidebar.expanded {
         right: 0;
     }
     
+    .recent-activity-sidebar.dragging {
+        transition: none;
+    }
+    
     .sidebar-header {
         padding: 0.75rem;
+        padding-right: 3rem;
     }
     
     .sidebar-title {
@@ -302,36 +426,67 @@ let sidebarExpanded = localStorage.getItem('sidebarExpanded') === 'true';
 let sidebarDisabled = localStorage.getItem('sidebarDisabled') === 'true';
 let activityData = [];
 let isDragging = false;
-let startY, startTop;
+let startY, startTop, currentTop;
 
 // Initialize sidebar state
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('recentActivitySidebar');
-    const disableSwitch = document.getElementById('sidebarDisableSwitch');
-    const enableButton = document.getElementById('sidebarEnableButton');
+    const persistentToggle = document.getElementById('sidebarPersistentToggle');
+    const dragHandle = document.getElementById('sidebarDragHandle');
     
-    if (sidebarDisabled) {
-        sidebar.classList.add('disabled');
-        disableSwitch.checked = false;
-        if (enableButton) enableButton.classList.remove('d-none');
-    } else {
-        sidebar.classList.remove('disabled');
-        if (window.innerWidth > 768) {
-            if (localStorage.getItem('sidebarExpanded') === 'true') {
-                toggleActivitySidebar();
-            } else {
-                setTimeout(() => toggleActivitySidebar(), 1000);
-            }
+    // Check user preference from server-side setting
+    {% if current_user.is_authenticated %}
+    const userSidebarEnabled = {{ 'true' if current_user.settings.get('activity_sidebar_enabled', True) else 'false' }};
+    if (!userSidebarEnabled) {
+        sidebarDisabled = true;
+        localStorage.setItem('sidebarDisabled', 'true');
+    }
+    {% endif %}
+    
+    updateSidebarVisibility();
+    
+    // Initialize drag for mobile
+    if (window.innerWidth <= 768 && dragHandle) {
+        dragHandle.addEventListener('touchstart', startDragging, { passive: false });
+        document.addEventListener('touchmove', dragSidebar, { passive: false });
+        document.addEventListener('touchend', stopDragging);
+        
+        // Set initial position from localStorage
+        const savedTop = localStorage.getItem('sidebarTop');
+        if (savedTop) {
+            currentTop = parseInt(savedTop);
+            sidebar.style.top = currentTop + 'px';
+        } else {
+            currentTop = window.innerHeight * 0.2; // Default 20% from top
         }
     }
     
-    // Initialize drag for mobile
-    if (window.innerWidth <= 768) {
-        sidebar.addEventListener('touchstart', startDragging);
-        sidebar.addEventListener('touchmove', dragSidebar);
-        sidebar.addEventListener('touchend', stopDragging);
+    // Auto-expand on desktop if not disabled
+    if (!sidebarDisabled && window.innerWidth > 768) {
+        if (localStorage.getItem('sidebarExpanded') === 'true') {
+            toggleActivitySidebar();
+        } else {
+            setTimeout(() => toggleActivitySidebar(), 1000);
+        }
     }
 });
+
+// Update sidebar visibility based on settings
+function updateSidebarVisibility() {
+    const sidebar = document.getElementById('recentActivitySidebar');
+    const persistentToggle = document.getElementById('sidebarPersistentToggle');
+    
+    if (sidebarDisabled) {
+        sidebar.classList.add('disabled');
+        persistentToggle.classList.add('hidden');
+        sidebar.classList.remove('expanded');
+        sidebarExpanded = false;
+        localStorage.setItem('sidebarExpanded', false);
+    } else {
+        sidebar.classList.remove('disabled');
+        persistentToggle.classList.remove('hidden');
+    }
+}
 
 // Toggle sidebar visibility
 function toggleActivitySidebar() {
@@ -339,6 +494,7 @@ function toggleActivitySidebar() {
     
     const sidebar = document.getElementById('recentActivitySidebar');
     const icon = document.getElementById('sidebarToggleIcon');
+    const persistentToggle = document.getElementById('sidebarPersistentToggle');
     
     sidebarExpanded = !sidebarExpanded;
     localStorage.setItem('sidebarExpanded', sidebarExpanded);
@@ -346,58 +502,98 @@ function toggleActivitySidebar() {
     if (sidebarExpanded) {
         sidebar.classList.add('expanded');
         icon.className = 'bi bi-chevron-left';
+        persistentToggle.classList.add('hidden');
         loadRecentActivitySidebar();
     } else {
         sidebar.classList.remove('expanded');
         icon.className = 'bi bi-chevron-right';
+        persistentToggle.classList.remove('hidden');
     }
 }
 
-// Toggle sidebar disable/enable
-function toggleSidebarDisable() {
-    const sidebar = document.getElementById('recentActivitySidebar');
-    const disableSwitch = document.getElementById('sidebarDisableSwitch');
-    const enableButton = document.getElementById('sidebarEnableButton');
-    
-    sidebarDisabled = !disableSwitch.checked;
+// Toggle sidebar disable/enable via user settings
+function toggleSidebarSetting(enabled) {
+    sidebarDisabled = !enabled;
     localStorage.setItem('sidebarDisabled', sidebarDisabled);
     
-    if (sidebarDisabled) {
-        sidebar.classList.add('disabled');
-        sidebar.classList.remove('expanded');
-        sidebarExpanded = false;
-        localStorage.setItem('sidebarExpanded', false);
-        if (enableButton) enableButton.classList.remove('d-none');
-    } else {
-        sidebar.classList.remove('disabled');
-        if (enableButton) enableButton.classList.add('d-none');
-        if (window.innerWidth > 768) {
-            setTimeout(() => toggleActivitySidebar(), 100);
-        }
-    }
+    // Update server-side setting
+    {% if current_user.is_authenticated %}
+    updateUserSidebarSetting(enabled);
+    {% endif %}
     
-    updateSidebarEnableButton();
+    updateSidebarVisibility();
+    
+    if (!sidebarDisabled && window.innerWidth > 768) {
+        setTimeout(() => toggleActivitySidebar(), 100);
+    }
 }
 
-// Drag functionality
+// Update user setting on server
+function updateUserSidebarSetting(enabled) {
+    fetch('{{ url_for("settings.update_user_setting") | e }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        },
+        body: JSON.stringify({
+            setting: 'activitySidebarToggle',
+            value: enabled
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            console.error('Failed to update sidebar setting:', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error updating sidebar setting:', error);
+    });
+}
+
+// Drag functionality for mobile
 function startDragging(e) {
     if (sidebarDisabled || window.innerWidth > 768) return;
+    
+    e.preventDefault();
     isDragging = true;
     startY = e.touches[0].clientY;
-    startTop = parseFloat(getComputedStyle(document.getElementById('recentActivitySidebar')).top);
+    
+    const sidebar = document.getElementById('recentActivitySidebar');
+    const rect = sidebar.getBoundingClientRect();
+    startTop = rect.top;
+    currentTop = startTop;
+    
+    sidebar.classList.add('dragging');
 }
 
 function dragSidebar(e) {
-    if (!isDragging || sidebarDisabled) return;
+    if (!isDragging || sidebarDisabled || window.innerWidth > 768) return;
+    
     e.preventDefault();
     const currentY = e.touches[0].clientY;
     const deltaY = currentY - startY;
-    const newTop = Math.min(Math.max(startTop + deltaY, 10), window.innerHeight - 10);
-    document.getElementById('recentActivitySidebar').style.top = `${newTop}px`;
+    
+    // Calculate new position with constraints
+    const sidebar = document.getElementById('recentActivitySidebar');
+    const sidebarHeight = sidebar.offsetHeight;
+    const minTop = 10;
+    const maxTop = window.innerHeight - sidebarHeight - 10;
+    
+    currentTop = Math.min(Math.max(startTop + deltaY, minTop), maxTop);
+    sidebar.style.top = `${currentTop}px`;
 }
 
 function stopDragging() {
+    if (!isDragging) return;
+    
     isDragging = false;
+    const sidebar = document.getElementById('recentActivitySidebar');
+    sidebar.classList.remove('dragging');
+    
+    // Save position to localStorage
+    localStorage.setItem('sidebarTop', currentTop.toString());
 }
 
 // Load recent activity data
