@@ -5,7 +5,7 @@ from flask_wtf.file import FileAllowed
 from flask_wtf.csrf import CSRFError
 from translations import trans
 from utils import requires_role, is_valid_email, format_currency, get_mongo_db, sanitize_input
-from models import User, get_user, update_user, create_kyc_record, update_kyc_record, get_kyc_record, to_dict_kyc_record, to_dict_user
+from models import User, get_user, update_user, create_kyc_record, update_kyc_record, get_kyc_record, to_dict_kyc_record, to_dict_user, get_user_by_email
 from bson import ObjectId
 from datetime import datetime, timezone
 from wtforms import StringField, TextAreaField, SubmitField, FileField
@@ -358,7 +358,8 @@ def update_user_setting():
         value = data.get('value')
         valid_settings = [
             'showKoboToggle', 'incognitoModeToggle', 'appSoundsToggle',
-            'fingerprintPasswordToggle', 'fingerprintPinToggle', 'hideSensitiveDataToggle'
+            'fingerprintPasswordToggle', 'fingerprintPinToggle', 'hideSensitiveDataToggle',
+            'activitySidebarToggle'
         ]
         if setting_name not in valid_settings:
             logger.error(
@@ -375,6 +376,8 @@ def update_user_setting():
             settings['incognito_mode'] = bool(value)
         elif setting_name == 'appSoundsToggle':
             settings['app_sounds'] = bool(value)
+        elif setting_name == 'activitySidebarToggle':
+            settings['activity_sidebar_enabled'] = bool(value)
         elif setting_name == 'fingerprintPasswordToggle':
             security_settings['fingerprint_password'] = bool(value)
         elif setting_name == 'fingerprintPinToggle':
