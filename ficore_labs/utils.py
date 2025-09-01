@@ -553,9 +553,26 @@ def can_user_interact(user):
             if user.role == 'admin':
                 logger.info(f"User {user.id} allowed to interact: Admin role", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
                 return True
+            
+            # Check subscription first
             if user.get('is_subscribed', False):
-                logger.info(f"User {user.id} allowed to interact: Active subscription", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
-                return True
+                subscription_end = user.get('subscription_end')
+                if subscription_end:
+                    subscription_end_aware = (
+                        subscription_end.replace(tzinfo=ZoneInfo("UTC"))
+                        if subscription_end.tzinfo is None
+                        else subscription_end
+                    )
+                    if subscription_end_aware > datetime.now(timezone.utc):
+                        logger.info(f"User {user.id} allowed to interact: Active subscription", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
+                        return True
+                    logger.info(f"User {user.id} subscription expired: {subscription_end_aware}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
+                else:
+                    # If subscribed but no end date, assume active (for admin-set subscriptions)
+                    logger.info(f"User {user.id} allowed to interact: Active subscription (no end date)", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
+                    return True
+            
+            # Check trial if no active subscription
             if user.get('is_trial', False):
                 trial_end = user.get('trial_end')
                 if trial_end:
@@ -568,10 +585,61 @@ def can_user_interact(user):
                         logger.info(f"User {user.id} allowed to interact: Active trial", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
                         return True
                     logger.info(f"User {user.id} trial expired: {trial_end_aware}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
+            
             logger.info(f"User {user.id} interaction denied: No active subscription or trial", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
             return False
     except Exception as e:
         logger.error(f"Error checking user interaction for user {user.get('id', 'unknown')}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id')})
+        return False
+
+def should_show_subscription_banner(user):
+    """
+    Determines if the subscription warning banner should be shown.
+    
+    Args:
+        user: The current user object (e.g., flask_login.current_user).
+        
+    Returns:
+        bool: True if banner should be shown, False otherwise.
+    """
+    try:
+        with current_app.app_context():
+            if not user or not user.is_authenticated:
+                return False
+            if user.role == 'admin':
+                return False
+            
+            # Don't show banner if user has active subscription
+            if user.get('is_subscribed', False):
+                subscription_end = user.get('subscription_end')
+                if subscription_end:
+                    subscription_end_aware = (
+                        subscription_end.replace(tzinfo=ZoneInfo("UTC"))
+                        if subscription_end.tzinfo is None
+                        else subscription_end
+                    )
+                    if subscription_end_aware > datetime.now(timezone.utc):
+                        return False
+                else:
+                    # If subscribed but no end date, assume active
+                    return False
+            
+            # Don't show banner if user has active trial
+            if user.get('is_trial', False):
+                trial_end = user.get('trial_end')
+                if trial_end:
+                    trial_end_aware = (
+                        trial_end.replace(tzinfo=ZoneInfo("UTC"))
+                        if trial_end.tzinfo is None
+                        else trial_end
+                    )
+                    if trial_end_aware > datetime.now(timezone.utc):
+                        return False
+            
+            # Show banner if no active subscription or trial
+            return True
+    except Exception as e:
+        logger.error(f"Error checking subscription banner for user {user.get('id', 'unknown')}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id')})
         return False
 
 def format_currency(amount, currency='₦', lang=None, include_symbol=True):
@@ -579,7 +647,12 @@ def format_currency(amount, currency='₦', lang=None, include_symbol=True):
         with current_app.app_context():
             if lang is None:
                 lang = session.get('lang', 'en') if has_request_context() else 'en'
-            amount = clean_currency(amount) if isinstance(amount, str) else float(amount) if amount is not None else 0
+            if amount is None or amount == '':
+                amount = 0
+            if isinstance(amount, str):
+                amount = clean_currency(amount)
+            else:
+                amount = float(amount)
             if amount.is_integer():
                 formatted = f"{int(amount):,}"
             else:
@@ -720,7 +793,7 @@ def track_user_activity(activity_type, description, amount=None, related_id=None
 __all__ = [
     'clean_currency', 'log_tool_usage', 'get_limiter', 'create_anonymous_session', 
     'is_valid_email', 'get_mongo_db', 'requires_role', 'is_admin', 'can_user_interact',
-    'format_currency', 'format_date', 'sanitize_input', 'generate_unique_id', 
+    'should_show_subscription_banner', 'format_currency', 'format_date', 'sanitize_input', 'generate_unique_id', 
     'validate_required_fields', 'get_user_language', 'log_user_action', 'track_user_activity',
     'initialize_tools_with_urls', 'TRADER_TOOLS', 
     'TRADER_NAV', 'STARTUP_TOOLS', 'STARTUP_NAV', 'ADMIN_TOOLS', 'ADMIN_NAV', 
