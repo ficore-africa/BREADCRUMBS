@@ -600,6 +600,15 @@ def create_app():
             status['details'] = str(e)
             return jsonify(status), 500
 
+    @app.route('/googlebd814b9b37c7a0c9.html')
+    def google_site_verification():
+        """Route to serve the Google Site Verification file directly."""
+        return send_from_directory(
+            os.path.join(app.root_path, 'google_verification'),
+            'googlebd814b9b37c7a0c9.html',
+            mimetype='text/html'
+        )
+
     @app.route('/view-data')
     @login_required
     def view_data():
