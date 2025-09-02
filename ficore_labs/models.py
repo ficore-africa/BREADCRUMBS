@@ -756,8 +756,10 @@ class User:
         Check if the user's trial or subscription is active.
         
         Returns:
-            bool: True if trial or subscription is active, False otherwise
+            bool: True if user is admin or trial/subscription is active, False otherwise
         """
+        if self.role == 'admin' or self.is_admin:
+            return True  # Admins always bypass trial/subscription checks
         if self.is_subscribed and self.subscription_end:
             subscription_end_aware = (
                 self.subscription_end.replace(tzinfo=timezone.utc)
