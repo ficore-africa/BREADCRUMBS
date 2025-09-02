@@ -236,6 +236,8 @@ class User(UserMixin):
         return str(self.id)
 
     def is_trial_active(self):
+        if self.role == 'admin':
+            return True  # Admins always bypass trial/subscription checks
         if self.is_subscribed and self.subscription_end:
             subscription_end_aware = (
                 self.subscription_end.replace(tzinfo=timezone.utc)
