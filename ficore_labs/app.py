@@ -609,6 +609,15 @@ def create_app():
             mimetype='text/html'
         )
 
+    @app.route('/sitemap.xml')
+    def sitemap():
+    """Route to serve the static sitemap.xml file."""
+    return send_from_directory(
+        os.path.join(app.root_path, 'sitemaps'),
+        'sitemap.xml',
+        mimetype='application/xml'
+    )
+
     @app.route('/view-data')
     @login_required
     def view_data():
