@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from flask import (
     Flask, jsonify, request, render_template, redirect, url_for, flash,
-    make_response, has_request_context, session, Response, current_app, abort
+    make_response, has_request_context, session, Response, current_app, abort, send_from_directory
 )
 from flask_session import Session
 from flask_cors import CORS
@@ -605,7 +605,7 @@ def create_app():
         """Route to serve the Google Site Verification file directly."""
         return send_from_directory(
             os.path.join(app.root_path, 'google_verification'),
-            'googlebd814b9b37c7a0c9.html',
+            'google489486b6f031d46f.html',
             mimetype='text/html'
         )
 
