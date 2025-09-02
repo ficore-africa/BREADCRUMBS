@@ -299,7 +299,7 @@ def create_app():
 
     # Initialize extensions
     setup_logging(app)
-    compress.init_app(app)  # FIXED: Proper method call
+    compress.init_app(app)
     csrf.init_app(app)
     limiter.init_app(app)
     babel.init_app(app)
@@ -411,6 +411,12 @@ def create_app():
     def ensure_lang_in_session():
         if 'lang' not in session:
             session['lang'] = 'en'  # Default language
+
+    # Redirect from onrender.com to custom domain
+    @app.before_request
+    def redirect_to_custom_domain():
+        if request.host.endswith("onrender.com"):
+            return redirect(request.url.replace("onrender.com", "business.ficoreafrica.com"), code=301)
 
     # Define format_currency filter
     def format_currency(value):
