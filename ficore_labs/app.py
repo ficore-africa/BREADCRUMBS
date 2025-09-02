@@ -530,7 +530,7 @@ def create_app():
         nav = []
         tools = []
         breadcrumb_items = []
-        
+
         if current_user.is_authenticated:
             role = getattr(current_user, 'role', None)
             if role == 'admin':
@@ -545,7 +545,7 @@ def create_app():
             else:
                 nav = build_nav(_TRADER_NAV)
                 tools = build_nav(_TRADER_TOOLS)
-            
+
             # Generate breadcrumb items
             try:
                 from helpers.breadcrumb_helper import get_breadcrumb_items
@@ -553,7 +553,7 @@ def create_app():
             except Exception as e:
                 logger.error(f"Error generating breadcrumb items: {e}")
                 breadcrumb_items = []
-        
+
         return {
             'current_year': datetime.now(timezone.utc).year,
             'current_lang': session.get('lang', 'en'),
@@ -611,12 +611,12 @@ def create_app():
 
     @app.route('/sitemap.xml')
     def sitemap():
-    """Route to serve the static sitemap.xml file."""
-    return send_from_directory(
-        os.path.join(app.root_path, 'sitemaps'),
-        'sitemap.xml',
-        mimetype='application/xml'
-    )
+        """Route to serve the static sitemap.xml file."""
+        return send_from_directory(
+            os.path.join(app.root_path, 'sitemaps'),
+            'sitemap.xml',
+            mimetype='application/xml'
+        )
 
     @app.route('/view-data')
     @login_required
@@ -625,8 +625,8 @@ def create_app():
             db = get_mongo_db()
             records = db.records.find({'user_id': current_user.id})
             cashflows = db.cashflows.find({'user_id': current_user.id})
-            return render_template('view_data.html', 
-                                 records=list(records), 
+            return render_template('view_data.html',
+                                 records=list(records),
                                  cashflows=list(cashflows),
                                  is_trial_active=current_user.is_trial_active())
         except Exception as e:
