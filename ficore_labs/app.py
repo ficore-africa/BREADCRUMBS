@@ -413,72 +413,72 @@ def create_app():
             session['lang'] = 'en'  # Default language
 
     # Redirect from onrender.com to custom domain
-@app.before_request
-def handle_redirects():
-    host = request.host
+    @app.before_request
+    def handle_redirects():
+        host = request.host
 
-    # Redirect onrender.com to custom domain
-    if host.endswith("onrender.com"):
-        new_url = request.url.replace("onrender.com", "business.ficoreafrica.com")
-        return redirect(new_url, code=301)
+        # Redirect onrender.com to custom domain
+        if host.endswith("onrender.com"):
+            new_url = request.url.replace("onrender.com", "business.ficoreafrica.com")
+            return redirect(new_url, code=301)
 
-    # Redirect www to root domain
-    if host.startswith("www."):
-        new_url = request.url.replace("www.", "", 1)
-        return redirect(new_url, code=301)
+        # Redirect www to root domain
+        if host.startswith("www."):
+            new_url = request.url.replace("www.", "", 1)
+            return redirect(new_url, code=301)
 
-    # Define format_currency filter
-    def format_currency(value):
-        try:
-            return "₦{:,.2f}".format(float(value))
-        except (ValueError, TypeError) as e:
-            logger.warning(f'Error formatting currency {value}: {str(e)}', extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-            return str(value)
+        # Define format_currency filter
+        def format_currency(value):
+            try:
+                return "₦{:,.2f}".format(float(value))
+            except (ValueError, TypeError) as e:
+                logger.warning(f'Error formatting currency {value}: {str(e)}', extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
+                return str(value)
 
-    # Register format_currency filter and global
-    app.jinja_env.filters['format_currency'] = format_currency
-    app.jinja_env.globals['format_currency'] = format_currency
+        # Register format_currency filter and global
+        app.jinja_env.filters['format_currency'] = format_currency
+        app.jinja_env.globals['format_currency'] = format_currency
 
-    # Define format_date filter
-    @app.template_filter('format_date')
-    def format_date_wrapper(value):
-        try:
-            return format_date(value, lang=session.get('lang', 'en'), format_type='short')
-        except Exception as e:
-            logger.warning(f'Error formatting date {value}: {str(e)}', extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-            return str(value)
+        # Define format_date filter
+        @app.template_filter('format_date')
+        def format_date_wrapper(value):
+            try:
+                return format_date(value, lang=session.get('lang', 'en'), format_type='short')
+            except Exception as e:
+                logger.warning(f'Error formatting date {value}: {str(e)}', extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
+                return str(value)
 
-    # Register format_date as global
-    app.jinja_env.globals['format_date'] = format_date_wrapper
+        # Register format_date as global
+        app.jinja_env.globals['format_date'] = format_date_wrapper
 
-    # Define is_trial_expired global
-    def is_trial_expired(trial_end, is_trial=True, is_subscribed=False, subscription_end=None):
-        try:
-            if is_subscribed and subscription_end:
-                subscription_end_aware = (
-                    subscription_end.replace(tzinfo=timezone.utc)
-                    if subscription_end.tzinfo is None
-                    else subscription_end
+        # Define is_trial_expired global
+        def is_trial_expired(trial_end, is_trial=True, is_subscribed=False, subscription_end=None):
+            try:
+                if is_subscribed and subscription_end:
+                    subscription_end_aware = (
+                        subscription_end.replace(tzinfo=timezone.utc)
+                        if subscription_end.tzinfo is None
+                        else subscription_end
+                    )
+                    return datetime.now(timezone.utc) > subscription_end_aware
+                if is_trial and trial_end:
+                    trial_end_aware = (
+                        trial_end.replace(tzinfo=timezone.utc)
+                        if trial_end.tzinfo is None
+                        else trial_end
+                    )
+                    return datetime.now(timezone.utc) > trial_end_aware
+                return True  # Default to expired if no valid trial or subscription
+            except Exception as e:
+                logger.error(
+                    f"Error checking trial expiration: {str(e)}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
                 )
-                return datetime.now(timezone.utc) > subscription_end_aware
-            if is_trial and trial_end:
-                trial_end_aware = (
-                    trial_end.replace(tzinfo=timezone.utc)
-                    if trial_end.tzinfo is None
-                    else trial_end
-                )
-                return datetime.now(timezone.utc) > trial_end_aware
-            return True  # Default to expired if no valid trial or subscription
-        except Exception as e:
-            logger.error(
-                f"Error checking trial expiration: {str(e)}",
-                extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
-            )
-            return True  # Default to expired if there's an error
+                return True  # Default to expired if there's an error
 
-    # Register is_trial_expired in Jinja globals
-    app.jinja_env.globals['is_trial_expired'] = is_trial_expired
-    logger.info("Registered is_trial_expired Jinja global", extra={'session_id': 'none', 'user_role': 'none', 'ip_address': 'none'})
+        # Register is_trial_expired in Jinja globals
+        app.jinja_env.globals['is_trial_expired'] = is_trial_expired
+        logger.info("Registered is_trial_expired Jinja global", extra={'session_id': 'none', 'user_role': 'none', 'ip_address': 'none'})
 
     # Set up Jinja globals
     app.jinja_env.globals.update(
