@@ -413,10 +413,19 @@ def create_app():
             session['lang'] = 'en'  # Default language
 
     # Redirect from onrender.com to custom domain
-    @app.before_request
-    def redirect_to_custom_domain():
-        if request.host.endswith("onrender.com"):
-            return redirect(request.url.replace("onrender.com", "business.ficoreafrica.com"), code=301)
+@app.before_request
+def handle_redirects():
+    host = request.host
+
+    # Redirect onrender.com to custom domain
+    if host.endswith("onrender.com"):
+        new_url = request.url.replace("onrender.com", "business.ficoreafrica.com")
+        return redirect(new_url, code=301)
+
+    # Redirect www to root domain
+    if host.startswith("www."):
+        new_url = request.url.replace("www.", "", 1)
+        return redirect(new_url, code=301)
 
     # Define format_currency filter
     def format_currency(value):
